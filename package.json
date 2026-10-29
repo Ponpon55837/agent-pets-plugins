@@ -1,0 +1,15 @@
+{
+  "name": "agent-pets-plugins",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.16.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "validate": "node scripts/validate-catalog.mjs --pr ."
+  },
+  "dependencies": {
+    "fflate": "0.8.3"
+  }
+}
