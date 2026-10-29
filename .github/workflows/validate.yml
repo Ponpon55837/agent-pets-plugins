@@ -1,0 +1,65 @@
+name: Validate catalog
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # The validator and the data it compares against come from the base branch,
+      # so a pull request cannot weaken the check that reviews it.
+      - name: Check out base (trusted validator)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          path: tools
+          persist-credentials: false
+
+      - name: Check out pull request (data only, never executed)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: pr
+          persist-credentials: false
+
+      # Only the pull request that introduces this workflow lacks a validator on its base.
+      - name: Bootstrap validator
+        run: |
+          if [ ! -f tools/scripts/validate-catalog.mjs ]; then
+            echo "::warning::The base branch has no validator yet; using the pull request's copy. Review scripts/ by hand."
+            mkdir -p tools/scripts
+            cp pr/package.json pr/pnpm-lock.yaml tools/
+            cp pr/scripts/validate-catalog.mjs tools/scripts/
+          fi
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: tools/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install validator dependencies
+        working-directory: tools
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate pull request
+        if: github.event_name == 'pull_request'
+        working-directory: tools
+        run: node scripts/validate-catalog.mjs --pr ../pr --base .
+
+      - name: Validate catalog
+        if: github.event_name != 'pull_request'
+        working-directory: tools
+        run: node scripts/validate-catalog.mjs --pr ../pr
