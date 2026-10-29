@@ -1,4 +1,28 @@
 {
   "schemaVersion": 1,
-  "plugins": []
+  "plugins": [
+    {
+      "id": "update-radar",
+      "name": {
+        "zh-TW": "AI 更新雷達",
+        "en-US": "AI Update Radar"
+      },
+      "description": {
+        "zh-TW": "追蹤 OpenAI、Claude Platform、Claude Code 官方更新、Tibo 當日公開貼文與 Codex 用量重設，新項目送進寵物通知中心。需要 Agent Pets 1.4.0 以上。",
+        "en-US": "Tracks OpenAI, Claude Platform, and Claude Code updates, Tibo's posts for the day, and Codex usage resets, and sends new items to the pet notification center. Requires Agent Pets 1.4.0+."
+      },
+      "author": "benshih28",
+      "publicKeyFingerprint": "ffb643e57400dee3",
+      "versions": [
+        {
+          "version": "0.2.0",
+          "apiVersion": "1",
+          "url": "https://raw.githubusercontent.com/Ponpon55837/agent-pets-plugins/main/packages/update-radar-0.2.0.agentpet-plugin",
+          "sha256": "e28124421d2effd7c674e3ab8788d14e00ad23aa904fa9537094f8bd151ca544",
+          "size": 34928,
+          "publishedAt": "2026-10-29T00:00:00.000Z"
+        }
+      ]
+    }
+  ]
 }
