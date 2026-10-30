@@ -43,3 +43,4 @@ To run it locally: `pnpm install`, then `pnpm validate`.
 The **Report issue** button on a plugin's page in the app opens a new issue here, with only the plugin id and version in the title. Use it for bugs, broken downloads, or security concerns about a listed plugin.
 
 Do not paste secrets, tokens, or personal data into issues.
+
