@@ -1,0 +1,44 @@
+name: Check scope
+
+# pull_request_target always runs this file from the base branch, so a pull request
+# cannot rewrite it the way it could rewrite a pull_request workflow.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: scope-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Reads the changed file list only; pull request code is never checked out or run.
+      - name: Allow only catalog data from contributors
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          ASSOCIATION: ${{ github.event.pull_request.author_association }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)')
+          outside=$(printf '%s\n' "$files" | grep -vxE 'index\.json|packages/[^/]+\.agentpet-plugin' || true)
+          if [ -z "$outside" ]; then
+            echo "Only catalog data changes."
+            exit 0
+          fi
+          printf 'Files outside the catalog:\n%s\n' "$outside"
+          # The owner and Dependabot (action and lockfile updates) still get a manual review before merging.
+          if [ "$ASSOCIATION" = "OWNER" ] || [ "$AUTHOR" = "dependabot[bot]" ]; then
+            echo "::warning::$AUTHOR changes files outside the catalog; review them by hand."
+            exit 0
+          fi
+          echo "::error::Contributor pull requests may only change index.json and packages/*.agentpet-plugin."
+          exit 1

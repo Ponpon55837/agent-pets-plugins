@@ -32,7 +32,9 @@ Every pull request runs [`scripts/validate-catalog.mjs`](scripts/validate-catalo
 - The ed25519 signature and `publicKeyFingerprint`. Removing a listed fingerprint fails; changing one is flagged for review.
 - Published versions and files under `packages/` cannot change.
 
-The run summary lists the permissions each new version requests, new hosts compared with the previous version, and code patterns that need a closer look, such as `innerHTML`, `eval`, or a bare `fetch`. A passing check does not replace review: a maintainer still reads the plugin source and decides whether to merge.
+The report is posted as a comment on the pull request. It lists the permissions each new version requests, new hosts compared with the previous version, and code patterns that need a closer look, such as `innerHTML`, `eval`, or a bare `fetch`. A passing check does not replace review: a maintainer still reads the plugin source and decides whether to merge.
+
+A separate `scope` check only allows contributor pull requests to change `index.json` and `packages/*.agentpet-plugin`. Changes to workflows, scripts or dependencies come from the maintainer.
 
 To run it locally: `pnpm install`, then `pnpm validate`.
 
