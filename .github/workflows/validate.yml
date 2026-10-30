@@ -17,36 +17,27 @@ jobs:
     timeout-minutes: 10
     steps:
       # The validator and the data it compares against come from the base branch,
-      # so a pull request cannot weaken the check that reviews it.
+      # so a pull request cannot weaken the check that reviews it. This workflow file
+      # itself comes from the pull request; "Check scope" rejects contributor changes to it.
       - name: Check out base (trusted validator)
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.pull_request.base.sha || github.sha }}
           path: tools
           persist-credentials: false
 
       - name: Check out pull request (data only, never executed)
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           path: pr
           persist-credentials: false
 
-      # Only the pull request that introduces this workflow lacks a validator on its base.
-      - name: Bootstrap validator
-        run: |
-          if [ ! -f tools/scripts/validate-catalog.mjs ]; then
-            echo "::warning::The base branch has no validator yet; using the pull request's copy. Review scripts/ by hand."
-            mkdir -p tools/scripts
-            cp pr/package.json pr/pnpm-lock.yaml tools/
-            cp pr/scripts/validate-catalog.mjs tools/scripts/
-          fi
-
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           package_json_file: tools/package.json
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
 
@@ -57,9 +48,23 @@ jobs:
       - name: Validate pull request
         if: github.event_name == 'pull_request'
         working-directory: tools
-        run: node scripts/validate-catalog.mjs --pr ../pr --base .
+        run: node scripts/validate-catalog.mjs --pr ../pr --base . --summary ../catalog-report.md
 
       - name: Validate catalog
         if: github.event_name != 'pull_request'
         working-directory: tools
-        run: node scripts/validate-catalog.mjs --pr ../pr
+        run: node scripts/validate-catalog.mjs --pr ../pr --summary ../catalog-report.md
+
+      - name: Publish summary
+        if: always()
+        run: if [ -f catalog-report.md ]; then cat catalog-report.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+      # "Post catalog report" turns this into a pull request comment.
+      - name: Upload report
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: catalog-report
+          path: catalog-report.md
+          if-no-files-found: ignore
+          retention-days: 7

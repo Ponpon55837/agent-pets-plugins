@@ -32,7 +32,9 @@
 - ed25519 簽章與 `publicKeyFingerprint`。移除已列出的指紋會失敗；更換指紋會標示出來請維護者確認。
 - 已發布的版本與 `packages/` 下的檔案不可變更。
 
-執行摘要會列出每個新版本要求的權限、和前一版相比新增的主機，以及需要特別注意的程式寫法，例如 `innerHTML`、`eval` 或裸 `fetch`。檢查通過不代表免審：維護者仍會閱讀插件原始碼，再決定是否合併。
+檢查報告會貼在 PR 留言中，列出每個新版本要求的權限、和前一版相比新增的主機，以及需要特別注意的程式寫法，例如 `innerHTML`、`eval` 或裸 `fetch`。檢查通過不代表免審：維護者仍會閱讀插件原始碼，再決定是否合併。
+
+另一項 `scope` 檢查只允許投稿者的 PR 修改 `index.json` 與 `packages/*.agentpet-plugin`；workflow、腳本與相依套件的變更一律由維護者處理。
 
 本機執行：`pnpm install` 後執行 `pnpm validate`。
 

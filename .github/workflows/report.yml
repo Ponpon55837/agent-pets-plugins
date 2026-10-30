@@ -1,0 +1,59 @@
+name: Post catalog report
+
+# Runs from the base branch after "Validate catalog" finishes, with a token that can
+# comment. The report artifact came from pull request data, so it is only read as text.
+on:
+  workflow_run:
+    workflows: [Validate catalog]
+    types: [completed]
+
+permissions:
+  actions: read
+  pull-requests: write
+
+concurrency:
+  group: report-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: true
+
+jobs:
+  comment:
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Post or update the report comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if ! gh run download "$RUN_ID" --repo "$REPO" --name catalog-report --dir "$RUNNER_TEMP/report"; then
+            echo "The run left no report."
+            exit 0
+          fi
+          # The pull request is found from the run's head commit, not from anything in the artifact.
+          pr=$(gh pr list --repo "$REPO" --state open --search "$HEAD_SHA" --json number,headRefOid \
+            --jq "map(select(.headRefOid == \"$HEAD_SHA\")) | .[0].number // empty")
+          if [ -z "$pr" ]; then
+            echo "No open pull request has head $HEAD_SHA."
+            exit 0
+          fi
+
+          marker='<!-- catalog-report -->'
+          body="$RUNNER_TEMP/body.md"
+          {
+            echo "$marker"
+            # Breaks @mentions so report text cannot notify anyone; keeps the comment under GitHub's size limit.
+            head -c 60000 "$RUNNER_TEMP/report/catalog-report.md" | sed 's/@/@\xE2\x80\x8B/g'
+            echo
+            echo "<sub>Commit ${HEAD_SHA:0:7} · [run]($GITHUB_SERVER_URL/$REPO/actions/runs/$RUN_ID)</sub>"
+          } > "$body"
+
+          existing=$(gh api --paginate "repos/$REPO/issues/$pr/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | head -n 1)
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$existing" -F "body=@$body" > /dev/null
+          else
+            gh api -X POST "repos/$REPO/issues/$pr/comments" -F "body=@$body" > /dev/null
+          fi
