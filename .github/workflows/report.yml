@@ -40,12 +40,30 @@ jobs:
             exit 0
           fi
 
+          # A pull request that changes workflows or scripts ran its own copy of them, so its
+          # artifact may hold any markdown. Only reports from catalog-only pull requests (or
+          # from the owner and Dependabot, whom "Check scope" also trusts) are posted as written.
+          files=$(gh api --paginate "repos/$REPO/pulls/$pr/files" --jq '.[] | .filename, (.previous_filename // empty)')
+          outside=$(printf '%s\n' "$files" | grep -vxE 'index\.json|packages/[^/]+\.agentpet-plugin' || true)
+          trusted=$(gh api "repos/$REPO/pulls/$pr" \
+            --jq "select(.head.sha == \"$HEAD_SHA\") | (.author_association == \"OWNER\" or .user.login == \"dependabot[bot]\")")
+          if [ -z "$trusted" ]; then
+            echo "Pull request $pr moved past $HEAD_SHA."
+            exit 0
+          fi
+
           marker='<!-- catalog-report -->'
           body="$RUNNER_TEMP/body.md"
           {
             echo "$marker"
-            # Breaks @mentions so report text cannot notify anyone; keeps the comment under GitHub's size limit.
-            head -c 60000 "$RUNNER_TEMP/report/catalog-report.md" | sed 's/@/@\xE2\x80\x8B/g'
+            if [ -n "$outside" ] && [ "$trusted" != "true" ]; then
+              echo "## Plugin catalog check"
+              echo
+              echo "This pull request changes files outside the catalog, so its report is not posted here. A maintainer reads it in the run."
+            else
+              # Breaks @mentions so report text cannot notify anyone; keeps the comment under GitHub's size limit.
+              head -c 60000 "$RUNNER_TEMP/report/catalog-report.md" | iconv -f UTF-8 -t UTF-8 -c | sed 's/@/@\xE2\x80\x8B/g'
+            fi
             echo
             echo "<sub>Commit ${HEAD_SHA:0:7} · [run]($GITHUB_SERVER_URL/$REPO/actions/runs/$RUN_ID)</sub>"
           } > "$body"
