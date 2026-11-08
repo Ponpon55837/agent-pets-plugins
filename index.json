@@ -87,6 +87,15 @@
       "publicKeyFingerprint": "e78c75d80c8fb08e",
       "versions": [
         {
+          "version": "1.0.1",
+          "apiVersion": "1",
+          "minAppVersion": "1.12.0",
+          "url": "https://raw.githubusercontent.com/Ponpon55837/agent-pets-plugins/main/packages/panel-theme-collection-1.0.1.agentpet-plugin",
+          "sha256": "5d99d677a37190621a2c2ad85061c57934728c324d3c5e9de740fe95104109b4",
+          "size": 57969,
+          "publishedAt": "2026-11-08T13:08:22.000Z"
+        },
+        {
           "version": "1.0.0",
           "apiVersion": "1",
           "minAppVersion": "1.12.0",
