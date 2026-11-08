@@ -12,7 +12,7 @@
 // Needs Node 22.18 or later, which loads the vendored TypeScript by type stripping.
 
 import { createHash, createPublicKey, verify } from 'node:crypto'
-import { appendFileSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { appendFileSync, lstatSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { isIP } from 'node:net'
 import { join, relative, sep } from 'node:path'
 import { unzipSync } from 'fflate'
@@ -79,13 +79,17 @@ const RISK_PATTERNS = [
   ['localStorage / sessionStorage', /\b(?:local|session)Storage\b/],
   ['indexedDB', /\bindexedDB\b/],
   ['dynamic import()', /(?<![.\w$])import\s*\(/],
-  ['external <script> / <iframe>', /<(?:script|iframe)\b[^>]*\bsrc\s*=\s*["']?\s*(?:https?:)?\/\//i],
+  // Bounded repeats keep this linear on long minified lines.
+  ['external <script> / <iframe>', /<(?:script|iframe)\b[^>]{0,500}\bsrc\s{0,20}=\s{0,20}["']?\s{0,20}(?:https?:)?\/\//i],
   ['<iframe>', /<iframe\b/i],
   ['atob', /(?<![.\w$])atob\s*\(/],
   ['String.fromCharCode', /\bfromCharCode\b/],
   ['javascript: URL', /["'`]\s*javascript:/i],
 ]
 const LONG_LINE = 1000
+// Bounds the report so it fits a pull request comment (65,536 characters) with room to spare.
+const REPORT_MAX_ITEMS = 200
+const REPORT_MAX_CHARS = 60_000
 
 // ---------------------------------------------------------------- reporting
 
@@ -94,18 +98,18 @@ const warnings = []
 const sections = []
 
 // Report text lands in a pull request comment, so every value that comes from the pull
-// request is shown through code() and every `where` through label(): neither can add
-// links, images, mentions or table cells.
+// request, `where` included, is shown through code(): inside a code span it cannot add
+// links (autolinked URLs too), images, HTML or emphasis. Mentions and `|` table cells are
+// handled where the text is posted and in permissionSection().
 function clip(value, maxLength) {
-  // Control, line-separator and bidi-override characters could hide or reorder text.
-  const text = String(value).replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2066-\u2069]/g, ' ')
+  // Control, line-separator, bidi and invisible format characters could hide or reorder text.
+  const text = String(value).replace(/[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/g, ' ')
   return text.length > maxLength ? `${text.slice(0, maxLength)}…` : text
 }
 function code(value, maxLength = 120) { return `\`${clip(value, maxLength).replace(/`/g, "'")}\`` }
-function label(value) { return clip(value, 160).replace(/[\\`*_[\]<>|!#~&]/g, '\\$&') }
 
-function error(where, message) { errors.push(`**${label(where)}**: ${message}`) }
-function warn(where, message) { warnings.push(`**${label(where)}**: ${message}`) }
+function error(where, message) { errors.push(`**${code(where, 160)}**: ${message}`) }
+function warn(where, message) { warnings.push(`**${code(where, 160)}**: ${message}`) }
 
 // ---------------------------------------------------------------- helpers
 
@@ -220,21 +224,32 @@ function listFiles(root) {
   return result
 }
 
-function readCatalog(root, label) {
-  const path = join(root, 'index.json')
-  if (!existsSync(path)) {
-    error(label, '`index.json` is missing.')
+/**
+ * Reads a checked-out file only when it is a regular file within maxBytes. A pull request
+ * can commit symlinks, which would otherwise read runner files or never-ending devices.
+ */
+function readRegularFile(path, maxBytes) {
+  let stat
+  try { stat = lstatSync(path) } catch { return { problem: 'missing' } }
+  if (!stat.isFile()) return { problem: 'not a regular file (symlinks are not allowed)' }
+  if (stat.size > maxBytes) return { problem: `larger than ${maxBytes} bytes` }
+  return { bytes: readFileSync(path) }
+}
+
+function readCatalog(root, where) {
+  const { bytes, problem } = readRegularFile(join(root, 'index.json'), CATALOG_MAX_BYTES)
+  if (problem) {
+    error(where, `\`index.json\` is ${problem}.`)
     return null
   }
-  const bytes = readFileSync(path)
-  if (bytes.byteLength < 1 || bytes.byteLength > CATALOG_MAX_BYTES) {
-    error(label, `\`index.json\` must be between 1 byte and ${CATALOG_MAX_BYTES} bytes.`)
+  if (bytes.byteLength < 1) {
+    error(where, `\`index.json\` must be between 1 byte and ${CATALOG_MAX_BYTES} bytes.`)
     return null
   }
   try {
     return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes))
   } catch {
-    error(label, '`index.json` is not valid UTF-8 JSON.')
+    error(where, '`index.json` is not valid UTF-8 JSON.')
     return null
   }
 }
@@ -312,14 +327,17 @@ async function download(url) {
     if (!catalogUrl(current)) throw new Error(`redirected to a URL outside the allowlist (${code(current)})`)
     const response = await fetch(current, { redirect: 'manual', signal: AbortSignal.timeout(60_000) })
     if ([301, 302, 303, 307, 308].includes(response.status)) {
+      await response.body?.cancel()
       const location = response.headers.get('location')
       if (!location) throw new Error(`redirect ${response.status} without a Location header`)
       current = new URL(location, current).href
       continue
     }
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
     const declared = Number(response.headers.get('content-length'))
-    if (Number.isFinite(declared) && declared > PACKAGE_MAX_BYTES) throw new Error('larger than 25 MiB')
+    if (!response.ok || (Number.isFinite(declared) && declared > PACKAGE_MAX_BYTES)) {
+      await response.body?.cancel()
+      throw new Error(response.ok ? 'larger than 25 MiB' : `HTTP ${response.status}`)
+    }
     const chunks = []
     let total = 0
     for await (const chunk of response.body) {
@@ -332,16 +350,25 @@ async function download(url) {
   throw new Error(`more than ${MAX_REDIRECTS} redirects`)
 }
 
+/** `packages/<name>` for a catalog URL that points into this repository's main branch, '' for a bad name, else null. */
+function localPackagePath(url) {
+  if (typeof url !== 'string' || !url.startsWith(LOCAL_PACKAGE_PREFIX)) return null
+  let name
+  try { name = decodeURIComponent(url.slice(LOCAL_PACKAGE_PREFIX.length)) } catch { return '' }
+  // One file name with no `/` or URL syntax, so it cannot leave packages/.
+  return /^[A-Za-z0-9_-][A-Za-z0-9._-]*\.agentpet-plugin$/.test(name) ? `packages/${name}` : ''
+}
+
 async function loadPackage(root, version) {
-  if (version.url.startsWith(LOCAL_PACKAGE_PREFIX)) {
-    let name
-    try { name = decodeURIComponent(version.url.slice(LOCAL_PACKAGE_PREFIX.length)) } catch { name = '' }
-    if (!/^[A-Za-z0-9._-]+\.agentpet-plugin$/.test(name)) throw new Error('local package name must be a single `*.agentpet-plugin` file in packages/')
-    const path = join(root, 'packages', name)
-    if (!existsSync(path)) throw new Error(`${code(`packages/${name}`)} is not in this pull request`)
-    return new Uint8Array(readFileSync(path))
-  }
-  return download(version.url)
+  const local = localPackagePath(version.url)
+  if (local === null) return download(version.url)
+  if (!local) throw new Error('local package name must be a single `*.agentpet-plugin` file in packages/')
+  const directory = lstatSync(join(root, 'packages'), { throwIfNoEntry: false })
+  if (!directory?.isDirectory()) throw new Error('`packages/` is missing or is not a regular directory')
+  const { bytes, problem } = readRegularFile(join(root, local), PACKAGE_MAX_BYTES)
+  if (problem === 'missing') throw new Error(`${code(local)} is not in this pull request`)
+  if (problem) throw new Error(`${code(local)} is ${problem}`)
+  return new Uint8Array(bytes)
 }
 
 function safeArchivePath(rawPath) {
@@ -613,15 +640,15 @@ function permissionSection(pluginId, version, manifest, previous) {
 
 // ---------------------------------------------------------------- main checks
 
-/** Loads, unpacks and parses one version; throws an Error whose message is the reason. */
-async function openVersion(root, version) {
-  const bytes = await loadPackage(root, version)
+/** Unpacks and parses a package; throws an Error whose message is the reason. */
+function unpack(bytes) {
   const files = extractArchive(bytes)
   const manifest = parseManifest(readManifest(files))
   if (manifest instanceof Error) throw manifest
-  return { bytes, files, manifest }
+  return { files, manifest }
 }
 
+/** Deep-checks one version. Returns its manifest, or null when the package is rejected. */
 async function inspectVersion(root, plugin, version) {
   const where = `${plugin.id} ${version.version}`
   let bytes
@@ -638,14 +665,9 @@ async function inspectVersion(root, plugin, version) {
   let files
   let manifest
   try {
-    files = extractArchive(bytes)
-    manifest = parseManifest(readManifest(files))
+    ({ files, manifest } = unpack(bytes))
   } catch (cause) {
     error(where, `Package rejected: ${cause.message}.`)
-    return null
-  }
-  if (manifest instanceof Error) {
-    error(where, `${manifest.message}.`)
     return null
   }
   if (manifest.id !== plugin.id) error(where, `\`plugin.json\` id is ${code(manifest.id)}, but the catalog says ${code(plugin.id)}.`)
@@ -671,7 +693,7 @@ async function inspectVersion(root, plugin, version) {
   }
 
   scanRisks(files, where)
-  return { manifest, files }
+  return manifest
 }
 
 function compareWithBase(prRoot, baseRoot, prPlugins, basePlugins) {
@@ -687,9 +709,10 @@ function compareWithBase(prRoot, baseRoot, prPlugins, basePlugins) {
     } else if (basePlugin.publicKeyFingerprint && prPlugin.publicKeyFingerprint !== basePlugin.publicKeyFingerprint) {
       warn(basePlugin.id, `⚠️ **Signing key changes** from ${code(basePlugin.publicKeyFingerprint)} to ${code(prPlugin.publicKeyFingerprint)}. Confirm the rotation with the original author through a channel you trust before merging.`)
     }
-    const prVersions = new Map(prPlugin.versions.filter(isRecord).map(version => [version.version, version]))
-    for (const baseVersion of basePlugin.versions ?? []) {
-      const prVersion = prVersions.get(baseVersion.version)
+    // Matched by precedence, so `1.0.0` cannot be republished as `1.0.0+rebuild`.
+    const prVersions = new Map(prPlugin.versions.filter(isRecord).map(version => [semverKey(version.version), version]))
+    for (const baseVersion of Array.isArray(basePlugin.versions) ? basePlugin.versions.filter(isRecord) : []) {
+      const prVersion = prVersions.get(semverKey(baseVersion.version))
       if (!prVersion) {
         warn(`${basePlugin.id} ${baseVersion.version}`, 'This published version is removed.')
         continue
@@ -702,14 +725,16 @@ function compareWithBase(prRoot, baseRoot, prPlugins, basePlugins) {
     }
   }
 
+  const listed = new Set(prPlugins.flatMap(plugin => plugin.versions.filter(isRecord).map(version => localPackagePath(version.url))))
   const prFiles = listFiles(prRoot)
   const baseFiles = listFiles(baseRoot)
   const changed = []
   for (const [path, full] of baseFiles) {
     const counterpart = prFiles.get(path)
     if (!counterpart) {
-      if (path.startsWith('packages/')) warn(path, 'A published package file is deleted.')
-      else changed.push(path)
+      if (!path.startsWith('packages/')) changed.push(path)
+      else if (listed.has(path)) error(path, 'A published package file is deleted, but `index.json` still lists it.')
+      else warn(path, 'A published package file is deleted.')
     } else if (statSync(full).size !== statSync(counterpart).size || sha256(readFileSync(full)) !== sha256(readFileSync(counterpart))) {
       if (path.startsWith('packages/')) error(path, 'A published package file is modified. Packages are immutable; publish a new version instead.')
       else changed.push(path)
@@ -718,7 +743,9 @@ function compareWithBase(prRoot, baseRoot, prPlugins, basePlugins) {
   for (const path of prFiles.keys()) if (!baseFiles.has(path)) changed.push(path)
   const outsideData = changed.filter(path => path !== 'index.json' && !path.startsWith('packages/'))
   if (outsideData.length) {
-    warn('Files outside the catalog', `⚠️ This pull request also changes ${outsideData.map(item => code(item)).join(', ')}. Review these by hand: changes to \`.github/\`, \`scripts/\` or the lockfile can change what this check does.`)
+    const shown = outsideData.slice(0, 30).map(item => code(item)).join(', ')
+    const more = outsideData.length > 30 ? ` and ${outsideData.length - 30} more` : ''
+    warn('Files outside the catalog', `⚠️ This pull request also changes ${shown}${more}. Review these by hand: changes to \`.github/\`, \`scripts/\` or the lockfile can change what this check does.`)
   }
 }
 
@@ -731,12 +758,24 @@ function writeSummary(file, checkedCount) {
     '',
     `Deep-checked ${checkedCount} new or changed version(s). A passing check is not a review: read the plugin source before merging.`,
   ]
-  if (errors.length) parts.push('', '### Errors', '', ...errors.map(item => `- ${item}`))
-  if (warnings.length) parts.push('', '### Warnings', '', ...warnings.map(item => `- ${item}`))
+  const list = (title, items) => {
+    if (!items.length) return
+    parts.push('', title, '', ...items.slice(0, REPORT_MAX_ITEMS).map(item => `- ${item}`))
+    if (items.length > REPORT_MAX_ITEMS) parts.push(`- … and ${items.length - REPORT_MAX_ITEMS} more (see the run log).`)
+  }
+  list('### Errors', errors)
+  list('### Warnings', warnings)
   if (sections.length) parts.push('', '## Permissions requested', '', ...sections.flatMap(section => [section, '']))
-  const markdown = `${parts.join('\n')}\n`
+  let markdown = `${parts.join('\n')}\n`
+  // Cut at a line end, so no code span or table row is left open.
+  if (markdown.length > REPORT_MAX_CHARS) {
+    markdown = `${markdown.slice(0, markdown.lastIndexOf('\n', REPORT_MAX_CHARS - 100) + 1)}\n… Report truncated; see the run log.\n`
+  }
   if (file) appendFileSync(file, markdown)
   process.stdout.write(markdown)
+  if (errors.length > REPORT_MAX_ITEMS || warnings.length > REPORT_MAX_ITEMS) {
+    console.error([...errors, ...warnings].join('\n'))
+  }
 }
 
 async function main() {
@@ -763,6 +802,19 @@ async function main() {
   const rekeyed = new Set(prPlugins
     .filter(plugin => basePlugins.some(base => base.id === plugin.id && base.publicKeyFingerprint !== plugin.publicKeyFingerprint))
     .map(plugin => plugin.id))
+  // Manifests of deep-checked versions (null when rejected), so a permission comparison
+  // never downloads or unpacks a package twice.
+  const manifests = new Map()
+  const previousManifest = async (plugin, version) => {
+    const key = `${plugin.id}@${version.version}`
+    if (!manifests.has(key)) {
+      const root = args.base && baseVersions.has(key) ? args.base : args.pr
+      manifests.set(key, unpack(await loadPackage(root, version)).manifest)
+    }
+    const manifest = manifests.get(key)
+    if (!manifest) throw new Error('the package is rejected above')
+    return manifest
+  }
   let checked = 0
   for (const plugin of prPlugins) {
     if (typeof plugin.id !== 'string' || !Array.isArray(plugin.versions)) continue
@@ -776,19 +828,26 @@ async function main() {
       const base = baseVersions.get(`${plugin.id}@${version.version}`)
       if (args.base && base && JSON.stringify(base) === JSON.stringify(version) && !rekeyed.has(plugin.id)) continue
       checked += 1
-      const result = await inspectVersion(args.pr, plugin, version)
-      if (!result) continue
+      let manifest
+      try {
+        manifest = await inspectVersion(args.pr, plugin, version)
+      } catch (cause) {
+        // The checks above report every expected failure; this keeps one bug from hiding the rest of the report.
+        error(`${plugin.id} ${version.version}`, `The validator failed on this version: ${code(cause?.message ?? cause, 200)}.`)
+        manifest = null
+      }
+      manifests.set(`${plugin.id}@${version.version}`, manifest)
+      if (!manifest) continue
       let previous = null
       const earlier = ordered[index - 1]
       if (earlier) {
         try {
-          const root = args.base && baseVersions.has(`${plugin.id}@${earlier.version}`) ? args.base : args.pr
-          previous = { version: earlier.version, manifest: (await openVersion(root, earlier)).manifest }
+          previous = { version: earlier.version, manifest: await previousManifest(plugin, earlier) }
         } catch (cause) {
           warn(`${plugin.id} ${version.version}`, `Could not load ${code(earlier.version)} for the permission comparison: ${cause.message}.`)
         }
       }
-      permissionSection(plugin.id, version.version, result.manifest, previous)
+      permissionSection(plugin.id, version.version, manifest, previous)
     }
   }
 
