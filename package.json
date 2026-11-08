@@ -4,10 +4,12 @@
   "type": "module",
   "packageManager": "pnpm@11.16.0",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.18"
   },
   "scripts": {
-    "validate": "node scripts/validate-catalog.mjs --pr ."
+    "validate": "node scripts/validate-catalog.mjs --pr .",
+    "test": "node --test tests/",
+    "check-rules": "node scripts/sync-app-rules.mjs"
   },
   "dependencies": {
     "fflate": "0.8.3"
