@@ -2,6 +2,9 @@ name: Validate catalog
 
 on:
   pull_request:
+  # Pushes come only from people with write access, so a branch's own validator and
+  # tests are exercised before it is merged; pull requests always run the base's.
+  push:
   workflow_dispatch:
 
 permissions:
@@ -39,11 +42,22 @@ jobs:
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          # Every Node 24 release loads the vendored TypeScript by type stripping (22.x needs 22.18+).
+          node-version: 24
 
       - name: Install validator dependencies
         working-directory: tools
         run: pnpm install --frozen-lockfile
+
+      # Base-branch tests only, so a pull request cannot change what they assert.
+      - name: Test validator
+        working-directory: tools
+        run: |
+          if [ -d tests ]; then
+            node --test tests/*.test.mjs
+          else
+            echo "The base branch has no validator tests yet."
+          fi
 
       - name: Validate pull request
         if: github.event_name == 'pull_request'
