@@ -1,0 +1,47 @@
+{
+  "repository": "https://github.com/Ponpon55837/agent-pets",
+  "licence": "MIT",
+  "commit": "9618f16ebbd00a73e6d12cf30ef55ebb54864ef8",
+  "files": [
+    {
+      "path": "electron/plugin-manifest.ts",
+      "sha256": "cd87b96a7f1f83ac078dc41951237ae7c279a0d3773134900e7eff4b3886de5d"
+    },
+    {
+      "path": "electron/plugin-panel-themes.ts",
+      "sha256": "d97f5817fab93fa827e4419f8f06afe9883c0e8158cf81c1c876913098d7e908"
+    },
+    {
+      "path": "electron/panel-theme-color.ts",
+      "sha256": "3eb896753d7efa87d7beb603cdd241b27feb844cea4d21af1885478333a34bb1"
+    },
+    {
+      "path": "electron/pet-sprite-validation.ts",
+      "sha256": "e31a4a8026077fc6f9bf1ec654b2f556550438f5ca50f59e9f5a31da3681bed1"
+    },
+    {
+      "path": "electron/pet-behavior-manifest.ts",
+      "sha256": "539d00043b12d5d364b1ae86a8c549d56cbb5ed67fa05549c8b733999ba3c01d"
+    },
+    {
+      "path": "electron/plugin-event-source.ts",
+      "sha256": "5557a399978b1c0a60b676a4aa358a2e7fe5a02ddf2e0bed2ffd66bbee60141c"
+    },
+    {
+      "path": "electron/sliding-window-limiter.ts",
+      "sha256": "7f5e57472c515adb4099dff3284d96f3756e0a3b6a39f6ee3958aa2701d59b33"
+    },
+    {
+      "path": "electron/value-guards.ts",
+      "sha256": "82de2a269f230975a50a50d0a71f56e498b878efe88a02ae640909d795b13651"
+    },
+    {
+      "path": "src/types/plugin.ts",
+      "sha256": "d4530275416f895b5df32389aba3dae831d7c1350c7532dd4151abde4a87b1d6"
+    },
+    {
+      "path": "src/types/id-patterns.ts",
+      "sha256": "4bc2b043987f3c15e564ef17eae6ea56f052104445554cb11a94a68f185fb9e5"
+    }
+  ]
+}
