@@ -21,9 +21,9 @@
 
 ### 最低 App 版本（`minAppVersion`）
 
-`minAppVersion` 是可以安裝該套件的最低 Agent Pets 版本，格式為 `major.minor.patch`（例如 `"1.12.0"`）。Agent Pets 1.12.0 以上會略過需要更新版 App 的版本；1.12.0 以前的 App 會隱藏所有設定了這個欄位的版本，所以套件在舊版 App 也能用時請不要設定。
+`minAppVersion` 是可以安裝該套件的最低 Agent Pets 版本，格式為 `major.minor.patch`（例如 `"1.12.0"`）。Agent Pets 1.12.0 以上會略過需要更新版 App 的版本；1.12.0 以前的 App 不認得這個欄位，會隱藏所有設定了它的版本，所以套件在舊版 App 也能用時請不要設定。
 
-含 `panelThemes` 的套件必須設定，且至少為 `1.12.0`。和已發布版本的其他欄位一樣，發布後不可再修改。
+含 `panelThemes` 的套件必須設定，且至少為 `1.12.0`，因為舊版 App 無法安裝這類套件。已發布的版本不會補上這個欄位：已發布版本的欄位都不可修改，而且補上後 1.11.x 的使用者就看不到這些版本。
 
 ### 面板主題
 
@@ -31,7 +31,7 @@
 
 - 字型為 `.woff2`，每個最多 1 MiB，且開頭必須是 `wOF2`。套件內每個 `.woff2` 都必須由主題的 `fonts[].src` 引用。
 - 背景圖為靜態 PNG 或 WebP，最多 8 MiB、每邊 64–4096 px、總計 8,388,608 px，EXIF 方向為 1。
-- 含主題的套件最大 25 MiB；不含 skins、主題圖片或字型的套件上限為 5 MiB。
+- 含 skins、主題圖片或字型的套件最大 25 MiB；其他套件（包含主題只設定配色的套件）上限為 5 MiB。
 
 發布新版本時，發 PR 把新版本加進該插件的 `versions`。如果更換簽章金鑰，已安裝的使用者會被要求確認新金鑰，請在 PR 中說明原因。
 
@@ -45,11 +45,11 @@
 - 每個新增或變更套件的 `size` 與 `sha256`、壓縮檔路徑、檔案類型與大小上限，以及 `plugin.json` 是否與目錄項目一致。
 - `plugin.json`（包含每個面板主題的文法、顏色與對比）由 App 自己的驗證器檢查。驗證器逐位元組複製在 [`scripts/vendor/agent-pets/`](scripts/vendor/agent-pets/)，對應 `vendor.json` 記錄的 App commit。主題字型、主題圖片與 `minAppVersion` 依上方規則檢查。
 - ed25519 簽章與 `publicKeyFingerprint`。移除已列出的指紋會失敗；更換指紋會標示出來請維護者確認。
-- 已發布的版本與 `packages/` 下的檔案不可變更。
+- 已發布的版本與 `packages/` 下的檔案不可變更。版本依 semver 優先順序比對，所以 `1.0.0+rebuild` 不能取代 `1.0.0`。刪除 `index.json` 仍列出的套件會失敗；`index.json` 與套件必須是一般檔案，不可為符號連結。
 
-檢查報告會貼在 PR 留言中，列出每個新版本要求的權限與貢獻、和前一版相比新增的授權項目（主機、權限、主題、字型），以及需要特別注意的程式寫法，例如 `innerHTML`、`eval` 或裸 `fetch`。檢查通過不代表免審：維護者仍會閱讀插件原始碼，再決定是否合併。
+檢查報告會貼在 PR 留言中，列出每個新版本要求的權限與貢獻、和前一版相比新增的授權項目（主機、權限、主題、字型），以及需要特別注意的程式寫法，例如 `innerHTML`、`eval` 或裸 `fetch`。檢查通過不代表免審：維護者仍會閱讀插件原始碼，再決定是否合併。投稿者的 PR 若也修改了目錄以外的檔案，執行的是它自己那份 workflow，因此留言只會指向執行紀錄。
 
-另一項 `scope` 檢查只允許投稿者的 PR 修改 `index.json` 與 `packages/*.agentpet-plugin`；workflow、腳本與相依套件的變更一律由維護者處理。
+另一項 `scope` 檢查只允許投稿者的 PR 修改 `index.json` 與 `packages/*.agentpet-plugin`；workflow、腳本與相依套件的變更一律由維護者處理。PR 一律使用基底分支的驗證器與測試；推送到本 repo 分支時則執行該分支自己的版本。
 
 本機執行（Node.js 22.18 以上）：`pnpm install` 後執行 `pnpm validate`。`pnpm test` 會執行驗證器的測試。
 

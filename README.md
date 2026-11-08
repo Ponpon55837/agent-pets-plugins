@@ -21,9 +21,9 @@ The online plugin catalog for [Agent Pets](https://github.com/Ponpon55837/agent-
 
 ### Minimum app version (`minAppVersion`)
 
-`minAppVersion` is the lowest Agent Pets version that may install a package, as `major.minor.patch` (for example `"1.12.0"`). Agent Pets 1.12.0 and later skip versions that need a newer app. Apps before 1.12.0 hide every version that sets the field, so leave it out when the package also works on older apps.
+`minAppVersion` is the lowest Agent Pets version that may install a package, as `major.minor.patch` (for example `"1.12.0"`). Agent Pets 1.12.0 and later skip versions that need a newer app. Apps before 1.12.0 do not know the field and hide every version that sets it, so leave it out when the package also works on older apps.
 
-It is required, at `1.12.0` or later, for packages that contribute `panelThemes`. Like the rest of a published version, it cannot be changed later.
+It is required, at `1.12.0` or later, for packages that contribute `panelThemes`, which older apps cannot install. It is never added to versions that are already published: like every field of a published version it cannot change, and adding it would hide those versions from users on 1.11.x.
 
 ### Panel themes
 
@@ -31,7 +31,7 @@ A package can contribute up to 8 panel themes through `contributes.panelThemes` 
 
 - Fonts are `.woff2` files of at most 1 MiB that start with `wOF2`. Every packaged `.woff2` must be named by a theme's `fonts[].src`.
 - Background images are static PNG or WebP files of at most 8 MiB, 64–4096 px per side and 8,388,608 px in total, with EXIF orientation 1.
-- A package with themes may be up to 25 MiB. A package without skins, theme images or fonts is limited to 5 MiB.
+- A package with skins, theme images or fonts may be up to 25 MiB. Any other package, including one whose themes only set colours, is limited to 5 MiB.
 
 To publish a new version, open a pull request that adds it to your plugin's `versions` list. If you rotate your signing key, users who already installed the plugin are asked to confirm the new key, so explain the change in the pull request.
 
@@ -45,11 +45,11 @@ Every pull request runs [`scripts/validate-catalog.mjs`](scripts/validate-catalo
 - Each new or changed package's `size` and `sha256`, archive paths, file types and size limits, and that `plugin.json` matches the catalog entry.
 - `plugin.json`, including every panel theme's grammar, colours and contrast, is checked by the app's own validator, copied byte for byte under [`scripts/vendor/agent-pets/`](scripts/vendor/agent-pets/) at the app commit pinned in its `vendor.json`. Theme fonts, theme images and `minAppVersion` are checked as described above.
 - The ed25519 signature and `publicKeyFingerprint`. Removing a listed fingerprint fails; changing one is flagged for review.
-- Published versions and files under `packages/` cannot change.
+- Published versions and files under `packages/` cannot change. Versions are matched by semver precedence, so `1.0.0+rebuild` cannot replace `1.0.0`. Deleting a package that `index.json` still lists fails, and `index.json` and packages must be regular files, not symlinks.
 
-The report is posted as a comment on the pull request. It lists the permissions and contributions each new version requests, the consent items it adds compared with the previous version (hosts, permissions, themes, fonts), and code patterns that need a closer look, such as `innerHTML`, `eval`, or a bare `fetch`. A passing check does not replace review: a maintainer still reads the plugin source and decides whether to merge.
+The report is posted as a comment on the pull request. It lists the permissions and contributions each new version requests, the consent items it adds compared with the previous version (hosts, permissions, themes, fonts), and code patterns that need a closer look, such as `innerHTML`, `eval`, or a bare `fetch`. A passing check does not replace review: a maintainer still reads the plugin source and decides whether to merge. A contributor pull request that also changes files outside the catalog ran its own copy of the workflows, so its comment only points to the run.
 
-A separate `scope` check only allows contributor pull requests to change `index.json` and `packages/*.agentpet-plugin`. Changes to workflows, scripts or dependencies come from the maintainer.
+A separate `scope` check only allows contributor pull requests to change `index.json` and `packages/*.agentpet-plugin`. Changes to workflows, scripts or dependencies come from the maintainer. Pull requests always run the base branch's validator and tests; pushes to a branch of this repository run that branch's own.
 
 To run it locally (Node.js 22.18 or later): `pnpm install`, then `pnpm validate`. `pnpm test` runs the validator's tests.
 
