@@ -71,6 +71,31 @@
           "publishedAt": "2026-10-29T00:00:00.000Z"
         }
       ]
+    },
+    {
+      "id": "panel-theme-collection",
+      "name": {
+        "zh-TW": "面板主題合集",
+        "en-US": "Panel Theme Collection"
+      },
+      "description": {
+        "zh-TW": "可自訂面板顏色、字型與背景的主題（含淺色與深色）。",
+        "en-US": "Panel themes with colours, fonts and backgrounds for light and dark modes."
+      },
+      "author": "Ponpon55837",
+      "homepage": "https://github.com/Ponpon55837/agent-pets-theme-plugin",
+      "publicKeyFingerprint": "e78c75d80c8fb08e",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "apiVersion": "1",
+          "minAppVersion": "1.12.0",
+          "url": "https://raw.githubusercontent.com/Ponpon55837/agent-pets-plugins/main/packages/panel-theme-collection-1.0.0.agentpet-plugin",
+          "sha256": "4c5baef21150d491b2f96b1f01aa4c8f3e5a3b6b69e3862ee51ad2d9e8df657e",
+          "size": 57974,
+          "publishedAt": "2026-11-08T09:27:07.779Z"
+        }
+      ]
     }
   ]
 }
