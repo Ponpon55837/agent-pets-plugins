@@ -45,6 +45,16 @@ jobs:
         working-directory: tools
         run: pnpm install --frozen-lockfile
 
+      # Base-branch tests only, so a pull request cannot change what they assert.
+      - name: Test validator
+        working-directory: tools
+        run: |
+          if [ -d tests ]; then
+            node --test tests/
+          else
+            echo "The base branch has no validator tests yet."
+          fi
+
       - name: Validate pull request
         if: github.event_name == 'pull_request'
         working-directory: tools
