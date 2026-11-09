@@ -15,6 +15,14 @@
       "publicKeyFingerprint": "ffb643e57400dee3",
       "versions": [
         {
+          "version": "0.4.0",
+          "apiVersion": "1",
+          "url": "https://raw.githubusercontent.com/Ponpon55837/agent-pets-plugins/main/packages/update-radar-0.4.0.agentpet-plugin",
+          "sha256": "8ff3399ceadce013bfbdb0cd5561f1a5603afd424d1ebfd919abba864edb3636",
+          "size": 59216,
+          "publishedAt": "2026-11-09T03:10:10.509Z"
+        },
+        {
           "version": "0.3.1",
           "apiVersion": "1",
           "url": "https://raw.githubusercontent.com/Ponpon55837/agent-pets-plugins/main/packages/update-radar-0.3.1.agentpet-plugin",
