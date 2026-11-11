@@ -130,13 +130,22 @@
         "en-US": "Word Walk"
       },
       "description": {
-        "zh-TW": "用日文 N5 翻卡練習英文釋義，依自評安排每日複習；可備份本機進度並開啟寵物提醒。",
-        "en-US": "Practice Japanese N5 with English definitions, daily spaced reviews, local progress backups and optional pet reminders."
+        "zh-TW": "練習日文 N5 與生活英文，六種小測驗可混合出題。日文翻卡支援每日複習、本機備份與寵物提醒。",
+        "en-US": "Practice Japanese N5 and everyday English with six quiz formats, plus daily Japanese flashcards, local backups and optional pet reminders."
       },
       "author": "Word Walk contributors",
       "homepage": "https://github.com/Ponpon55837/Word_Walk",
       "publicKeyFingerprint": "42436e4d75b74141",
       "versions": [
+        {
+          "version": "1.1.0",
+          "apiVersion": "1",
+          "minAppVersion": "1.14.0",
+          "url": "https://raw.githubusercontent.com/Ponpon55837/agent-pets-plugins/main/packages/word-walk-1.1.0.agentpet-plugin",
+          "sha256": "e019966641fcbee4bb6f219d41e4ef0422730f5af982a205c50eaccfcc0136af",
+          "size": 34253,
+          "publishedAt": "2026-11-11T07:14:27.355Z"
+        },
         {
           "version": "1.0.0",
           "apiVersion": "1",
